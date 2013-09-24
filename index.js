@@ -11,7 +11,7 @@ var fs			= require("fs"),
 	optimist	= require("optimist"),
 	
 	// We only take one domain for now, whatever's last specified.
-	proxyDomain	= optimist._.pop() || "localhost",
+	proxyDomain	= (optimist._||[]).pop() || "localhost",
 	port		= optimist.port || optimist.p || 3000,
 	dir			= optimist.dir || process.cwd() || __dirname;
 

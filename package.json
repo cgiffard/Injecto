@@ -29,6 +29,9 @@
     "mocha": "~1.13.0"
   },
   "dependencies": {
-    "optimist": "~0.6.0"
+    "optimist": "~0.6.0",
+    "bl": "~0.4.1",
+    "colors": "~0.6.2",
+    "cheerio": "~0.12.2"
   }
 }
