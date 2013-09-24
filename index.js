@@ -1,22 +1,27 @@
-var fs = require("fs"),
-	bl = require("bl"),
-	url = require("url"),
-	path = require("path"),
-	http = require("http"),
-	zlib = require("zlib"),
-	colors = require("colors"),
-	cheerio = require("cheerio"),
+#!/usr/bin/env node
+
+var fs			= require("fs"),
+	bl			= require("bl"),
+	url			= require("url"),
+	path		= require("path"),
+	http		= require("http"),
+	zlib		= require("zlib"),
+	colors		= require("colors"),
+	cheerio		= require("cheerio"),
+	optimist	= require("optimist"),
+	
 	// We only take one domain for now, whatever's last specified.
-	proxyDomain = process.argv.pop(),
-	port = 3000;
+	proxyDomain	= optimist._.pop() || "localhost",
+	port		= optimist.port || optimist.p || 3000,
+	dir			= optimist.dir || process.cwd() || __dirname;
 
 // One time synchronous enumeration of available scripts
-var injectAssets = fs.readdirSync(__dirname),
+var injectAssets = fs.readdirSync(dir),
 	cssAssets = injectAssets.filter(function(name) {
 		return name.match(/\.css$/i);
 	}),
 	jsAssets = injectAssets.filter(function(name) {
-		return name.match(/\.js$/i) && name !== "injecto.js";
+		return name.match(/\.js$/i);
 	});
 
 function started() {

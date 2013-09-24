@@ -27,5 +27,8 @@
   "devDependencies": {
     "chai": "~1.8.0",
     "mocha": "~1.13.0"
+  },
+  "dependencies": {
+    "optimist": "~0.6.0"
   }
 }
