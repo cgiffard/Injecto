@@ -1,0 +1,31 @@
+{
+  "name": "Injecto",
+  "version": "0.0.0",
+  "description": "Test your code in production!",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha -R spec"
+  },
+  "bin": {
+    "injecto": "index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/cgiffard/Injecto.git"
+  },
+  "keywords": [
+    "proxy",
+    "test",
+    "code",
+    "injection"
+  ],
+  "author": "Christopher Giffard",
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/cgiffard/Injecto/issues"
+  },
+  "devDependencies": {
+    "chai": "~1.8.0",
+    "mocha": "~1.13.0"
+  }
+}
