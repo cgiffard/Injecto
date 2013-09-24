@@ -8,7 +8,7 @@ var fs			= require("fs"),
 	zlib		= require("zlib"),
 	colors		= require("colors"),
 	cheerio		= require("cheerio"),
-	optimist	= require("optimist"),
+	optimist	= require("optimist").argv,
 	
 	// We only take one domain for now, whatever's last specified.
 	proxyDomain	= (optimist._||[]).pop() || "localhost",
