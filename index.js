@@ -29,7 +29,7 @@ function started() {
 }
 
 function injecto(req,res) {
-	var resPath = path.join(__dirname, req.url.split(/injecto\//).pop());
+	var resPath = path.join(dir, req.url.split(/injecto\//).pop());
 
 	fs.stat(resPath,function(err) {
 		if (err) return error(req,res,404);
@@ -63,7 +63,8 @@ function rewrite(remoteRes,localRes) {
 			$("[" + param + "]").each(function(i,item) {
 				var attr = url.parse($(item).attr(param));
 				if (attr.hostname === proxyDomain || attr.host === proxyDomain) {
-					$(item).attr(param,attr.pathname + (attr.search||"") + (attr.hash||""));
+					$(item).attr(param,
+						attr.pathname + (attr.search||"") + (attr.hash||""));
 				}
 			});
 		});
