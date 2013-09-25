@@ -68,6 +68,8 @@ function rewrite(remoteRes,localRes) {
 				}
 			});
 		});
+		
+		$("head").append("<script type='text/javascript' src='/--injecto-core'/>");
 
 		cssAssets.forEach(function(asset) {
 			$("head")
@@ -127,7 +129,49 @@ function proxy(req,res) {
 		}
 
 		remoteRes.pipe(res);
+	})
+	.on("error",function(error) {
+		console.log("Request Error: %s".red,error.message);
+		res.end();
 	});
+}
+
+function consolo(req,res) {
+	req.pipe(bl(function(err,data) {
+		try {
+			var data	= JSON.parse(String(data)),
+				context	= data.context,
+				error	= data.error,
+				message	= data.message;
+			
+		} catch(e) {
+			console.log(e);
+			return console.log(String(data));
+		}
+		
+		process.stdout.write("\n");
+		
+		if (context)
+			console.log("Message from ".red + String(context).blue);
+		
+		if (error)
+			console.log("%s, line %d: %s", error.file, error.line, String(error.message).red);
+		
+		if (message)
+			console.log(String(message).blue);
+		
+		process.stdout.write("\n");
+		
+		res.writeHead(200)
+		res.end();
+	}));
+}
+
+function injectoCore(req,res) {
+	console.log("[INJECTO CORE]".green);
+	res.writeHead(200,{"content-type":"text/javascript"});
+	fs.createReadStream(path.join(__dirname,"/error.js"))
+		.pipe(res);
 }
 
 function error(req,res,code) {
@@ -141,7 +185,13 @@ var server = http.createServer();
 
 // Handler
 server.on("request",function(req,res) {
-	if (req.url.match(/\/\-\-injecto/))
+	if (req.url.match(/^\/\-\-injecto-core/))
+		return injectoCore(req,res);
+	
+	if (req.url.match(/^\/\-\-injecto-console/))
+		return consolo(req,res);
+	
+	if (req.url.match(/^\/\-\-injecto\//))
 		return injecto(req,res);
 
 	proxy(req,res);
@@ -149,3 +199,7 @@ server.on("request",function(req,res) {
 
 // Listen
 server.listen(port,started);
+
+server.on("error",function(err) {
+	console.log("ERROR: %s".red,error.message);
+});
