@@ -34,4 +34,22 @@
 				sendMessage(item,arguments);
 			};
 		});
+
+	if ("WebSocket" in window) {
+		var socket = new WebSocket(
+			"ws://" + window.location.hostname + ":" + (+window.location.port+1));
+		
+		socket.addEventListener("open",function() {
+			console.log("Client Websocket Ready.");
+		});
+		
+		socket.addEventListener("message",function(command) {
+			command = command.data || command;
+			
+			if (command === "reload") {
+				console.log("Reloading page.");
+				window.location.reload();
+			}
+		});
+	}
 })();

@@ -2,18 +2,30 @@
 
 var fs			= require("fs"),
 	bl			= require("bl"),
+	ws			= require("ws"),
 	url			= require("url"),
 	path		= require("path"),
 	http		= require("http"),
 	zlib		= require("zlib"),
+	util		= require("util"),
 	colors		= require("colors"),
 	cheerio		= require("cheerio"),
+	chokidar	= require("chokidar"),
 	optimist	= require("optimist").argv,
 	
 	// We only take one domain for now, whatever's last specified.
 	proxyDomain	= (optimist._||[]).pop() || "localhost",
 	port		= optimist.port || optimist.p || 3000,
-	dir			= optimist.dir || process.cwd() || __dirname;
+	dir			= optimist.dir || process.cwd() || __dirname,
+	
+	// State
+	startTime	= Date.now(),
+	wsClients	= [],
+	
+	// Ignore file modification notifications in our watch directory
+	// that are triggered before we've been running for this number of
+	// miliseconds.
+	watchThreshold = 500;
 
 // One time synchronous enumeration of available scripts
 var injectAssets = fs.readdirSync(dir),
@@ -26,6 +38,29 @@ var injectAssets = fs.readdirSync(dir),
 
 function started() {
 	console.log("Injecto running for %s, on port %d".blue.bold,proxyDomain,port);
+	console.log("Watching %s for changes.",dir.bold);
+	
+	chokidar
+		.watch(dir)
+		.on("add",reload)
+		.on("change",reload)
+		.on("unlink",reload);
+}
+
+function reload(path) {
+	if (Date.now() < startTime + watchThreshold) {
+		return;
+	}
+	
+	if (!wsClients.length) return;
+	
+	console.log("\n\nFilesystem changed: %s",path.red);
+	console.log("Triggering reload for %d clients...".red,wsClients.length);
+	
+	wsClients.forEach(function(socket) {
+		socket.send("reload");
+	});
+	wsClients = [];
 }
 
 function injecto(req,res) {
@@ -144,6 +179,9 @@ function consolo(req,res) {
 				error	= data.error,
 				message	= data.message;
 			
+			if (typeof message !== "array" && !(message instanceof Array))
+				message = [message];
+			
 		} catch(e) {
 			console.log(e);
 			return console.log(String(data));
@@ -157,8 +195,14 @@ function consolo(req,res) {
 		if (error)
 			console.log("%s, line %d: %s", error.file, error.line, String(error.message).red);
 		
-		if (message)
-			console.log(String(message).blue);
+		if (message) {
+			message = util.format.apply(util,message);
+			
+			if (message.indexOf("\n") < 0)
+				message = message.blue;
+			
+			console.log(message);
+		}
 		
 		process.stdout.write("\n");
 		
@@ -180,8 +224,18 @@ function error(req,res,code) {
 	res.end("Failed to deliver resource. (" + code + ")");
 }
 
+function close() {
+	console.log(
+		"Thanks! Injecto was running for %d seconds.".green,
+		Math.floor((Date.now() - startTime) / 1000)
+	);
+	
+	process.exit(0);
+}
+
 // Server
-var server = http.createServer();
+var server = http.createServer(),
+	wsServer = new ws.Server({ port: port + 1 });
 
 // Handler
 server.on("request",function(req,res) {
@@ -203,3 +257,18 @@ server.listen(port,started);
 server.on("error",function(err) {
 	console.log("ERROR: %s".red,error.message);
 });
+
+// Web sockets...
+wsServer.on("connection", function(ws) {
+	var index = wsClients.length;
+	wsClients.push(ws);
+	
+	console.log("Web socket client connected.".red);
+	
+	ws.on("close",function() {
+		console.log("Web socket client disconnected.".red);
+		wsClients.splice(index,1);
+	});
+});
+
+process.on("SIGINT",close);
