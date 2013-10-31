@@ -12,6 +12,7 @@ var fs			= require("fs"),
 	cheerio		= require("cheerio"),
 	chokidar	= require("chokidar"),
 	optimist	= require("optimist").argv,
+	StreamCache	= require("stream-cache"),
 	
 	// We only take one domain for now, whatever's last specified.
 	proxyDomain	= (optimist._||[]).pop() || "localhost",
@@ -21,6 +22,7 @@ var fs			= require("fs"),
 	// State
 	startTime	= Date.now(),
 	wsClients	= [],
+	cache		= {},
 	
 	// Ignore file modification notifications in our watch directory
 	// that are triggered before we've been running for this number of
@@ -74,24 +76,9 @@ function injecto(req,res) {
 }
 
 function rewrite(remoteRes,localRes) {
-	remoteRes.pipe(bl(function(err,data) {
-		if (err) throw err;
+	remoteRes.pipe(bl(runRewrite));
 
-		if (remoteRes.headers['content-encoding'] && (
-			remoteRes.headers['content-encoding'].match(/gzip/) ||
-			remoteRes.headers['content-encoding'].match(/deflate/))) {
-
-			console.log("Zipped. Unzipping".yellowBG.black);
-			return zlib.unzip(data,function(err,newData) {
-				if (err) throw err;
-				runRewrite(newData);
-			});
-		}
-
-		runRewrite(data);
-	}));
-
-	function runRewrite(data) {
+	function runRewrite(err, data) {
 		var $ = cheerio.load(data);
 
 		["href","src"].forEach(function(param) {
@@ -102,6 +89,19 @@ function rewrite(remoteRes,localRes) {
 						attr.pathname + (attr.search||"") + (attr.hash||""));
 				}
 			});
+		});
+		
+		// Kill HTTP import URLs
+		// TODO this is a horrible travesty. make this not suck
+		var importRegExp =
+			new RegExp("\\@import\\s*url\\(([\"\'])http?\\:\\/\\/" + proxyDomain,"ig");
+		
+		$("style").each(function(i,item) {
+			$(item).html(
+					$(item).html().replace(importRegExp,function(m1,m2) {
+						return "@import url(" + m2;
+					})
+				);
 		});
 		
 		$("head").append("<script type='text/javascript' src='/--injecto-core'/>");
@@ -119,8 +119,7 @@ function rewrite(remoteRes,localRes) {
 		});
 
 		var resultCode = $.html();
-		console.log("INJECTED!".green);
-
+		
 		delete remoteRes.headers["content-encoding"];
 		delete remoteRes.headers["content-length"];
 		delete remoteRes.headers["accept-ranges"];
@@ -142,33 +141,54 @@ function proxy(req,res) {
 
 	requestOptions.headers.host = proxyDomain;
 	requestOptions.headers.referer = "http://" + proxyDomain + "/";
-
-	http.get(requestOptions, function(remoteRes) {
+	
+	if (cache[req.url]) {
+		return done(cache[req.url], true);
+	}
+	
+	function done(remoteRes, fromCache) {
 		var time = Date.now() - timeStarted;
-
+		
+		if (!remoteRes.headers["content-type"]) {
+			remoteRes.headers["content-type"] = "text/html";
+		}
+		
 		console.log(
-			"REMOTE [%s] %s (%dms)",
+			"%s [%s] %s (%dms)",
+			(fromCache ? "CACHE" : "REMOTE"),
 			String(remoteRes.statusCode)[remoteRes.statusCode>=400?"red":"green"],
 			req.url.white,
 			time,
 			(remoteRes.headers["content-encoding"] || "uncompressed").yellow);
-
+		
+		if (!fromCache && remoteRes.statusCode < 400) {
+			cache[req.url] = new StreamCache();
+			
+			if (remoteRes.headers["content-encoding"]) {
+				delete remoteRes.headers["content-encoding"];
+				remoteRes.pipe(zlib.createUnzip()).pipe(cache[req.url]);
+			} else {
+				remoteRes.pipe(cache[req.url]);
+			}
+			
+			cache[req.url].headers = remoteRes.headers;
+			cache[req.url].statusCode = remoteRes.statusCode;
+			remoteRes = cache[req.url];
+		}
+		
 		if (remoteRes.headers["content-type"] &&
 			remoteRes.headers["content-type"].match(/^text\/html/i)) {
 			return rewrite(remoteRes,res);
 		}
-
-		if (remoteRes.headers["content-encoding"]) {
-			delete remoteRes.headers["content-encoding"];
-			return remoteRes.pipe(zlib.createUnzip()).pipe(res);
-		}
-
+	
 		remoteRes.pipe(res);
-	})
-	.on("error",function(error) {
-		console.log("Request Error: %s".red,error.message);
-		res.end();
-	});
+	}
+	
+	http.get(requestOptions, done)
+		.on("error",function(error) {
+			console.log("Request Error: %s".red,error.message);
+			res.end();
+		});
 }
 
 function consolo(req,res) {
