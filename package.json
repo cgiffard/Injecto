@@ -1,6 +1,6 @@
 {
   "name": "injecto",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Test your code in production!",
   "main": "index.js",
   "scripts": {
