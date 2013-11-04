@@ -6,8 +6,10 @@ var fs			= require("fs"),
 	url			= require("url"),
 	path		= require("path"),
 	http		= require("http"),
-	zlib		= require("zlib"),
+	repl		= require("repl"),
 	util		= require("util"),
+	zlib		= require("zlib"),
+	after		= require("after"),
 	colors		= require("colors"),
 	cheerio		= require("cheerio"),
 	chokidar	= require("chokidar"),
@@ -38,9 +40,32 @@ var injectAssets = fs.readdirSync(dir),
 		return name.match(/\.js$/i);
 	});
 
+// REPL/Prompt aware log
+var logTimer = null,
+	lastWasPrompt = false;
+
+function log() {
+	if (lastWasPrompt)
+		process.stdout.write("\n\n");
+	
+	console.log.apply(console,arguments);
+	lastWasPrompt = false;
+	
+	if (!prompt) return;
+	
+	if (logTimer)
+		clearTimeout(logTimer);
+	
+	logTimer = setTimeout(function() {
+		process.stdout.write("\n");
+		prompt.displayPrompt();
+		lastWasPrompt = true;
+	},100);
+}
+
 function started() {
-	console.log("Injecto running for %s, on port %d".blue.bold,proxyDomain,port);
-	console.log("Watching %s for changes.",dir.bold);
+	log("Injecto running for %s, on port %d".blue.bold,proxyDomain,port);
+	log("Watching %s for changes.",dir.bold);
 	
 	chokidar
 		.watch(dir)
@@ -56,8 +81,8 @@ function reload(path) {
 	
 	if (!wsClients.length) return;
 	
-	console.log("\n\nFilesystem changed: %s",path.red);
-	console.log("Triggering reload for %d clients...".red,wsClients.length);
+	log("\n\nFilesystem changed: %s",path.red);
+	log("Triggering reload for %d clients...".red,wsClients.length);
 	
 	wsClients.forEach(function(socket) {
 		socket.send("reload");
@@ -70,7 +95,7 @@ function injecto(req,res) {
 
 	fs.stat(resPath,function(err) {
 		if (err) return error(req,res,404);
-		console.log("[INJECTO] %s".green,req.url);
+		log("[INJECTO] %s".green,req.url);
 		fs.createReadStream(resPath).pipe(res);
 	});
 }
@@ -153,7 +178,7 @@ function proxy(req,res) {
 			remoteRes.headers["content-type"] = "text/html";
 		}
 		
-		console.log(
+		log(
 			"%s [%s] %s (%dms)",
 			(fromCache ? "CACHE" : "REMOTE"),
 			String(remoteRes.statusCode)[remoteRes.statusCode>=400?"red":"green"],
@@ -186,7 +211,7 @@ function proxy(req,res) {
 	
 	http.get(requestOptions, done)
 		.on("error",function(error) {
-			console.log("Request Error: %s".red,error.message);
+			log("Request Error: %s".red,error.message);
 			res.end();
 		});
 }
@@ -203,17 +228,17 @@ function consolo(req,res) {
 				message = [message];
 			
 		} catch(e) {
-			console.log(e);
-			return console.log(String(data));
+			log(e);
+			return log(String(data));
 		}
 		
 		process.stdout.write("\n");
 		
 		if (context)
-			console.log("Message from ".red + String(context).blue);
+			log("Message from ".red + String(context).blue);
 		
 		if (error)
-			console.log("%s, line %d: %s", error.file, error.line, String(error.message).red);
+			log("%s, line %d: %s", error.file, error.line, String(error.message).red);
 		
 		if (message) {
 			message = util.format.apply(util,message);
@@ -221,7 +246,7 @@ function consolo(req,res) {
 			if (message.indexOf("\n") < 0)
 				message = message.blue;
 			
-			console.log(message);
+			log(message);
 		}
 		
 		process.stdout.write("\n");
@@ -232,7 +257,7 @@ function consolo(req,res) {
 }
 
 function injectoCore(req,res) {
-	console.log("[INJECTO CORE]".green);
+	log("[INJECTO CORE]".green);
 	res.writeHead(200,{"content-type":"text/javascript"});
 	fs.createReadStream(path.join(__dirname,"/error.js"))
 		.pipe(res);
@@ -245,7 +270,7 @@ function error(req,res,code) {
 }
 
 function close() {
-	console.log(
+	log(
 		"Thanks! Injecto was running for %d seconds.".green,
 		Math.floor((Date.now() - startTime) / 1000)
 	);
@@ -275,7 +300,7 @@ server.on("request",function(req,res) {
 server.listen(port,started);
 
 server.on("error",function(err) {
-	console.log("ERROR: %s".red,error.message);
+	log("ERROR: %s".red,error.message);
 });
 
 // Web sockets...
@@ -283,12 +308,80 @@ wsServer.on("connection", function(ws) {
 	var index = wsClients.length;
 	wsClients.push(ws);
 	
-	console.log("Web socket client connected.".red);
+	log("Web socket client connected.".red);
+	
+	prompt.prompt =
+		util.format("broadcast REPL: %d clients> ",wsClients.length);
 	
 	ws.on("close",function() {
-		console.log("Web socket client disconnected.".red);
+		log("Web socket client disconnected.".red);
 		wsClients.splice(index,1);
+		
+		prompt.prompt =
+			util.format("broadcast REPL: %d clients> ",wsClients.length);
 	});
 });
 
 process.on("SIGINT",close);
+
+// REPL
+var prompt;
+prompt = repl.start({
+	prompt: "\n",
+	eval: function(cmd, context, filename, callback) {
+		cmd = (cmd||"").replace(/^\s*\(/, "").replace(/\)\s*$/, "");
+		
+		if (!cmd.trim().length) {
+			return callback(null,new Error("No command".red));
+		}
+		
+		if (!wsClients.length) {
+			return callback(null,new Error("No clients connected".red));
+		}
+		
+		if (cmd.replace(/\s+/ig,"") === "reload") {
+			return reload("User command");
+		}
+		
+		console.log("Broadcasting to %d clients.".blue, wsClients.length);
+		var next = after(wsClients.length, function() {
+			process.stdout.write("\n");
+			prompt.displayPrompt()
+		});
+		
+		wsClients.forEach(function(socket) {
+			var complete = false;
+			
+			socket.send("command:" + cmd);
+			socket.once("message", function(string, data) {
+				if (complete) return;
+				
+				complete = true;
+				string = string.substr(9);
+				
+				if (string.match(/^CYCLIC/)) {
+					console.log(string.red);
+				
+				} else if (string.match(/^\s*undefined/)) {
+					console.log("undefined");
+					
+				} else {
+					console.log(JSON.parse(string))
+				}
+				
+				next();
+			});
+			
+			setTimeout(function() {
+				if (!complete) {
+					complete = true;
+					next();
+				}
+			},250);
+		});
+	}
+});
+
+prompt.on("exit",function() {
+	close();
+});

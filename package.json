@@ -1,6 +1,6 @@
 {
   "name": "injecto",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Test your code in production!",
   "main": "index.js",
   "scripts": {
@@ -35,6 +35,7 @@
     "cheerio": "~0.12.3",
     "chokidar": "~0.7.0",
     "ws": "~0.4.31",
-    "stream-cache": "0.0.2"
+    "stream-cache": "0.0.2",
+    "after": "~0.8.1"
   }
 }
