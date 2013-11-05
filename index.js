@@ -96,6 +96,17 @@ function injecto(req,res) {
 	fs.stat(resPath,function(err) {
 		if (err) return error(req,res,404);
 		log("[INJECTO] %s".green,req.url);
+		
+		if (resPath.match(/\.css$/i)) {
+			console.log("setting header as css");
+			res.setHeader("Content-Type","text/css");
+		}
+		
+		if (resPath.match(/\.js$/i)) {
+			console.log("setting header as js");
+			res.setHeader("Content-Type","text/javascript");
+		}
+		
 		fs.createReadStream(resPath).pipe(res);
 	});
 }

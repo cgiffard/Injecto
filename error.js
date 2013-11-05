@@ -2,7 +2,7 @@
 	var ajaxObject = new XMLHttpRequest(),
 		superConsole = console || {};
 	
-	window.addEventListener("error",function(err) {
+	(window.addEventListener||window.attachEvent)("error",function(err) {
 		sendData({
 			"error": {
 				"message": err.message,
@@ -34,12 +34,15 @@
 	}
 	
 	window.console = {};
-	["info","log","warn","error","dir"]
-		.forEach(function(item) {
+	var items = ["info","log","warn","error","dir"];
+	for (var i in items) {
+		if (!items.hasOwnProperty(i)) continue;
+		(function(item) {
 			window.console[item] = function() {
 				sendMessage(item,arguments);
 			};
-		});
+		})(items[i]);
+	}
 
 	if ("WebSocket" in window) {
 		var socketReady = true;
