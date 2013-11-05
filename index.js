@@ -190,12 +190,13 @@ function proxy(req,res) {
 		}
 		
 		log(
-			"%s [%s] %s (%dms)",
+			"%s [%s] %s (%dms) %s %s",
 			(fromCache ? "CACHE" : "REMOTE"),
 			String(remoteRes.statusCode)[remoteRes.statusCode>=400?"red":"green"],
 			req.url.white,
 			time,
-			(remoteRes.headers["content-encoding"] || "uncompressed").yellow);
+			(remoteRes.headers["content-encoding"] || "uncompressed").yellow,
+			remoteRes.headers["content-type"]);
 		
 		if (!fromCache && remoteRes.statusCode < 400) {
 			cache[req.url] = new StreamCache();
@@ -216,7 +217,8 @@ function proxy(req,res) {
 			remoteRes.headers["content-type"].match(/^text\/html/i)) {
 			return rewrite(remoteRes,res);
 		}
-	
+		
+		res.setHeader("Content-Type",remoteRes.headers["content-type"]);
 		remoteRes.pipe(res);
 	}
 	
