@@ -20,7 +20,7 @@ to worry about network connectivity.
 You'll need node and npm.
 
 ```sh
-npm install -g injecto`
+npm install -g injecto
 ```
 
 Navigate to a folder with resources you want to inject into the page.
