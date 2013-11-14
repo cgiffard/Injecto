@@ -1,6 +1,6 @@
 (function() {
 	var ajaxObject = new XMLHttpRequest(),
-		superConsole = console || {};
+		superConsole = window.console || {};
 	
 	(window.addEventListener||window.attachEvent)("error",function(err) {
 		sendData({
